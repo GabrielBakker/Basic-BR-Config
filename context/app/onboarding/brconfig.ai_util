@@ -1,0 +1,2 @@
+LOGGING 10, context\app\startlog.txt, unattended
+include settings.sys

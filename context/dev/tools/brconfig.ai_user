@@ -1,0 +1,2 @@
+LOGGING 10, context\app\startlog.txt
+include settings.sys

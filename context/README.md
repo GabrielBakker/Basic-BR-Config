@@ -42,12 +42,12 @@ tooling at whatever BR codebase you're on. There are three published parts:
 
 - Don't be in a hurry to deliver. Look at the context documentation before you code. 
 
-- The master copies of programs are stored in ___________ form. (completed later) 
+- The master copies of programs are stored in **source (`.brs`, Lexi-authored)** form.
   If the program masters are stored in source format decompiling (REPLACE SOURCE) 
   is prohibited. 
 
-- BR starts in ___________, so kit paths handed to BR take the prefix ___________ 
-  (none when BR starts in the app root). (completed in ONBOARDING STEP 1; see
+- BR starts in **the app root** (`DRIVE c:,.,\,\` in `settings.sys`), so kit paths handed to
+  BR take **no prefix**. (completed in ONBOARDING STEP 1; see
   `dev/BR_launch.md#start-folder`)
 
 ## Installation

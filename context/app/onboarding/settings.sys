@@ -1,0 +1,24 @@
+drive c:,.,\,\ ! This drive statement works from any directory
+wbserver c:\
+WORKSTACK 983039
+FLOWSTACK 1250
+RPNSTACK 10000
+FORSTACK 2000
+maxrecall 50
+printscreen newpage
+break 8 1600
+option 14
+option 26
+option 43
+option 35
+option 56 ! Make srch return -1 instead of 0
+option 66 passphrase
+statusline off
+Baseyear 1980
+include printer.sys
+wsid=unique
+screen N 07
+keyboard 0F 2D
+keyboard 15 2B
+keyboard 01,41
+@gabriel keyboard 01,01
