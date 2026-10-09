@@ -1,0 +1,191 @@
+---
+alwaysApply: true
+---
+
+# BR Launch
+
+## BR launch environment
+
+AI models need to know how to invoke Business Rules for compilation and testing. The executable and
+all three config files are fixed, kit-relative paths — nothing here is machine-specific.
+`brconfig.ai_util`/`brconfig.ai_user` are generated from `brconfig.sys` by ONBOARDING.md STEP 1, 
+never hand-edited.
+
+| Fact | Value | Nature |
+|---|---|---|
+| **BR executable** | `$BR_EXE` | Ships with the kit |
+| **`brconfig.sys`** | `$BR_CONFIG` | Existing app startup config |
+| **`brconfig.ai_util`** | `$BR_AI_UTIL` | AI Utility — headless (`UNATTENDED`) |
+| **`brconfig.ai_user`** | `$BR_AI_USER` | AI User — interactive, for testing user interfaces |
+| **`brls.exe`** | `$BRLS_EXE` | Standalone syntax pre-check (optional semantic pass via `-check -sema`) — does **not** invoke BR (§6.1) |
+
+```powershell
+$env:BR_EXE     = "context\dev\tools\brserver-433c-Win32-Debug-2026-08-27.exe"
+$env:BR_CONFIG  = "context\dev\tools\brconfig.sys"
+$env:BR_AI_UTIL = "context\dev\tools\brconfig.ai_util"
+$env:BR_AI_USER = "context\dev\tools\brconfig.ai_user"
+$env:BRLS_EXE   = "context\dev\tools\brls.exe"
+```
+
+```bash
+export BR_EXE="context/dev/tools/brserver-433c-Win32-Debug-2026-08-27.exe"
+export BR_CONFIG="context/dev/tools/brconfig.sys"
+export BR_AI_UTIL="context/dev/tools/brconfig.ai_util"
+export BR_AI_USER="context/dev/tools/brconfig.ai_user"
+export BRLS_EXE="context/dev/tools/brls.exe"
+```
+
+**All paths above, and every invocation in this file and in §6.1, are run from the kit root**
+(the directory containing `context/`). Run from there, or resolve these paths against it first.
+`brls.exe` takes no config file and needs none of `$BR_CONFIG`/
+`$BR_AI_UTIL`/`$BR_AI_USER` — it never launches BR.
+
+<a id="start-folder"></a>
+### Two starting folders: where you launch BR, and where BR starts
+
+A BR run involves two folders, and they are not always the same one:
+
+| Path | Resolved against |
+|---|---|
+| The executable, the `-<config-file>` argument, and the config's `LOGGING` file | the **OS folder BR is launched from** — the kit root |
+| Every path handed **to BR**: the startup command (`"PROC …"`, `"RUN …"`, `"LOAD …"`), the lines of a proc, and the names a program opens | **BR's start folder**: the first `DRIVE`'s 2nd parameter plus its 4th (`DRIVE M:,C:\ads,,\app` starts in `C:\ads\app`) — see [br_tree — DRIVE](../br_tree/00-configuration/config-directives/spec.md#paths) |
+
+When the two are the same folder, which is the usual install, a kit path such as
+`context\scratch\x.prc` works in both places. When they differ, give BR the kit file's path from
+BR's start folder. ONBOARDING STEP 1 records that prefix at the end of the AI Model Rules in
+`context/README.md`. For example, if the kit is installed in `y:\wb\ar1` but the first `DRIVE`
+starts BR in `y:\wb`, launch from `y:\wb\ar1` with `"PROC ar1\context\scratch\x.prc"`.
+Keep `LOGGING context\app\startlog.txt` unprefixed, because it resolves against the launch folder.
+
+Don't `CD` to the kit root instead. Production BR starts in the same folder (the AI configs keep
+`brconfig.sys`'s `DRIVE` lines), so any file name an app program gives relative to it would stop
+resolving.
+
+Confirmed on the kit's 4.33c executable, launched from the kit root each time (probe:
+`context/scratch/startdir/`): with BR starting one folder above the kit root, the kit-relative
+`"PROC context\…"` failed with error 4203 ("path does not exist"), and `"PROC <folder>\context\…"`
+ran. With BR starting one folder below it, only the path from that folder ran. In every case the
+`LOGGING` file was written under the launch folder.
+
+## AI Canonical invocations
+
+Copy these verbatim.
+
+```
+"$BR_EXE" -"$BR_CONFIG"                           # start BR into the app (interactive)
+"$BR_EXE" "RUN glp\trial_bal" -"$BR_AI_UTIL"       # run a program, headless
+"$BR_EXE" "RUN cnp\menu" -"$BR_AI_USER"            # run a statement/command, interactive
+"$BR_EXE" "PROC cnp\batch.prc" -"$BR_AI_UTIL"      # run a procedure, headless
+```
+
+- **`-<config-file>`** names a config file — a dash **immediately followed** by the
+  path/filename (e.g. `-"$BR_CONFIG"`), no space. With none given, BR looks for `brconfig.sys`, then
+  `wbconfig.sys`.
+- The **first quoted argument** is a BR statement/command to run the instant BR starts 
+  (e.g. `"RUN cnp\menu"`, `"PROC start"`). 
+- Syntax reference: [br_tree — Startup command line](../br_tree/00-configuration/platform/spec.md).
+
+---
+
+## Development commands
+
+### Compile / syntax-check
+Sources compile `.br.brs` → `.br` on modification. To force a compile-check of one source:
+
+```
+"$BR_EXE" "LOAD program.brs source" -"$BR_AI_UTIL"   # parses; reports first error + line
+```
+
+The **`source`** keyword is required to load a `.brs` as source — `LOAD` defaults to object mode and
+will not infer source from the extension ([LOAD](../br_tree/70-commands/program-management/spec.md#loading)).
+
+### Run a program with console input
+```
+"$BR_EXE" "RUN cop\xlate850" -"$BR_AI_USER"
+```
+
+### Run a program with proc-fed input
+
+Use this to run an interactive program headlessly. The program's `INPUT`/`LINPUT`/`RINPUT`
+statements read the lines of a procedure file instead of the keyboard, and `PROCIN` returns 1.
+Put the program and its answers in a proc, then start BR with `PROC` on that file:
+
+```
+! tmp\run_it.prc
+RUN custom\myprog PROC
+first answer
+second answer
+SYSTEM
+```
+
+```
+"$BR_EXE" "PROC tmp\run_it.prc" -"$BR_AI_UTIL"
+```
+
+- **`PROC` is an option of `RUN` here, not a file name.** `LOAD custom\myprog` followed by
+  `RUN PROC` is equivalent.
+- **These spellings fail** (confirmed on the kit's 4.33c executable):
+  - `"RUN custom\myprog PROC"` as the startup argument → error 2103, because no procedure is
+    running yet.
+  - `RUN PROC tmp\x.prc` → error 2104, because nothing is loaded and `tmp\x.prc` is never read
+    as a name.
+  - A plain `RUN custom\myprog` inside the proc → `PROCIN` stays 0, and the run aborts at the
+    first input statement.
+- **One proc line is read per input statement.** Lines after the last one the program reads run
+  as commands once it ends, so finish with `SYSTEM`.
+- **The `RUN` line must not be the proc's last line.**
+- Full rules: [`br_tree` — RUN … PROC](../br_tree/70-commands/program-management/spec.md#run-proc).
+---
+
+## The Lexi preprocessor
+
+Some BR shops write source for **Lexi**, a preprocessor that adds a handful of constructs base BR
+doesn't have (`/* ... */` comments, `X$&=` compound append, `#Select#/#Case#`, `#Autonumber#`,
+`#Define#`, and line-number-free editing) and rewrites them into plain, correctly line-numbered BR
+text before real BR ever compiles it. 
+
+- **Lexi's syntax** (what each construct does): [`essentials.md`](essentials.md#1-core-language-rules).
+- **The full reference** — what Lexi is, both known distributions, how the VS Code extension
+  invokes it, and every directive in detail:
+  [`br_tree` — Lexi](../br_tree/00-configuration/installation-tooling/Lexi.md).
+- **How this fits into the actual coding loop**:
+  [`APP-DEV-GUIDE.md`](APP-DEV-GUIDE.md#lexi-aware-coding-loop).
+
+### Running `lexi-compile.ps1`
+
+[`dev/tools/lexi-compile.ps1`](tools/lexi-compile.ps1) translates (and optionally compiles) a
+Lexi-authored `.brs` file headlessly — no editor or VS Code window involved — running under
+`UNATTENDED` logging so a bad input aborts fast instead of hanging the shell.
+
+```powershell
+# Translate only (default) — produces <source>.lexiout.brs next to the source
+context\dev\tools\lexi-compile.ps1 -Source path\to\file.brs
+
+# Translate AND compile to a real .br object
+context\dev\tools\lexi-compile.ps1 -Source path\to\file.brs -Compile
+
+# Explicit output paths
+context\dev\tools\lexi-compile.ps1 -Source path\to\file.brs -OutFile path\to\translated.brs -Compile -OutObject path\to\file.br
+```
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `-Source` | *(required)* | The `.brs` file to translate. |
+| `-OutFile` | `<Source>.lexiout.brs` | Where the translated, plain-BR output goes. |
+| `-Compile` | off (switch) | Also compile the translated output to a `.br` object (`LOAD`/`SAVE` or `REPLACE`, whichever applies), via the same bundled runtime. |
+| `-OutObject` | `<Source>` with its extension replaced by `.br` | Where the compiled `.br` goes, when `-Compile` is given. |
+| `-LexiPath` | auto-detected under `$env:USERPROFILE\.vscode\extensions\crs-dev.vslang-br-*\Lexi` | The Lexi install folder (`lexi.brs`, `lexionly.brs`, `linenum.brs`, `brnative.exe`, `wbconfig.sys`). Pass explicitly if that extension isn't installed, or to compile through a different Lexi install. |
+| `-BrExe` | `<LexiPath>\brnative.exe` | The BR executable to run Lexi with. |
+| `-WbConfig` | `<LexiPath>\wbconfig.sys` | The config to run Lexi with (Lexi's own — separate from this app's `brconfig.sys`). |
+| `-KeepTemp` | off (switch) | Keep the generated proc/config/log temp files afterward — useful for debugging a failure. |
+| `-TimeoutSec` | `30` | Kill the BR process if it hasn't exited after this many seconds. A safety net only — unattended mode should abort on its own well before this. |
+
+See `Get-Help -Full dev\tools\lexi-compile.ps1` for the complete parameter help and examples.
+
+---
+
+## Deploy notes
+
+- Deploy = copy compiled `.br` and `.brs` into the app tree; no further build required.
+- ScreenIO event-code changes require recompiling the **screen**, not just the program.
+

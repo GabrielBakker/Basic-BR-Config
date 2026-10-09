@@ -1,0 +1,7 @@
+/wbserver.dat
+/fileio.log
+/FileLay/template/*.bak
+/FileLay/version
+/brserial.dat
+*.bak
+/spool

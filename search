@@ -1,0 +1,162 @@
+! Search... this procfile is used to search every br program for the search string specified.
+
+CONFIG STYLE CLEAR
+CLEAR
+
+! Ensure that srchhelp is there.
+skip 7 if exists("srchhelp.br")
+00010    DIM RECORD$*800
+00020    OPEN #1: "Name= temp.[wsid]", DISPLAY, INPUT 
+00030    LINPUT #1: RECORD$ EOF STOP1
+00040    STOP 
+00050 STOP1: STOP 1
+save srchhelp.br
+clear
+
+00005 OPTION BASE 1
+00007 ON PAGEOFLOW IGNORE
+00010 dim FolderList$(1)*2000
+00012 dim ProcTextFound$(1)*10000
+00014 dim SearchTerms$(1)*100
+00020 let fnBuildFolderList(mat FolderList$)
+00062 execute "dir "&FolderList$(1)&"*.* >dir.doc" error Ignore
+00064 for Index=2 to udim(mat FolderList$)
+00072    execute "dir "&FolderList$(Index)&"*.* >>dir.doc" error Ignore
+00085 next Index
+
+00094 ! Make sure all file handles are available
+00095 if file(5)<>-1 then close #5: 
+00096 if file(1)<>-1 then close #1: 
+00097 if file(2)<>-1 then close #2: 
+
+00101 Dim SEARCHFOR$*80
+00102 Dim OUTFILE$*85
+00103 OPEN #5: "SROW=20,SCOL=3,EROW=20,ECOL=77,CAPTION=Search for what?,BORDER=D",DISPLAY,OUTIN
+00104 print #5: newpage !:
+      input #5, fields "1,1,C 74":SEARCHFOR$
+00105 close #5:
+00106 SEARCHFOR$=TRIM$(SEARCHFOR$)
+00107 OUTFILE$=SEARCHFOR$(1:8)&".out" !Set Default
+00109 if NOT FNVALID(SEARCHFOR$(1:8)) THEN !:
+      print "Put results in what file? "; !:
+      INPUT OUTFILE$
+00110 let outfile$=trim$(outfile$)
+00111 if not pos(outfile$,".") then outfile$=outfile$&".out"
+
+00115 let fnParseSearch(mat SearchTerms$,SearchFor$)
+
+00122    dim string$*9999
+00130    OPEN #1: "NAME="&OUTFILE$&", Replace", display, output !:
+         CLOSE #1: ! Make sure file exists and is empty
+00150    DIM RECORD$*255,PATH$*80
+00160    OPEN #1: "NAME=DIR.DOC",DISPLAY,INPUT
+00170    OPEN #2: "NAME=srchPROC, Replace, recl=2000",DISPLAY,OUTPUT
+00180    ReadNext: if (timer-lastprinted)>.05 and FileCount<>LastCount then let lastPrinted=Timer : let LastCount=FileCount : print FileCount
+00182    LINPUT #1: RECORD$ EOF DONE 
+00183    ! if lwrc$(trim$(record$(1:9)))="menus"  then pause
+00184    if pos(lwrc$(record$),"files,") and pos(lwrc$(record$),"bytes") then goto ReadNext
+00185    if lwrc$(trim$(Record$(1:9)))="search" and trim$(record$(11:13))="" then goto ReadNext
+00186    if lwrc$(Record$(16:20))="<dir>" then goto ReadNext ! Skip directories
+00187    IF RECORD$(1:3)="Dir" THEN LET PATH$=RECORD$(14:255) : LET DUMMY=POS(PATH$,"*",1) : LET PATH$=PATH$(1:DUMMY-1) : goto ReadNext
+00188    if lwrc$(RECORD$(11:13))="out" then goto ReadNext ! Ignore the previous search result files
+00190    if val(record$(15:22))=0 then goto ReadNext ! error ReadNext ! Skip empty files and nonfiles
+00195    IF lwrc$(RECORD$(11:13))="wb " or lwrc$(RECORD$(11:13))="br " THEN goto ReadBRProgram
+
+00295    open #3: "NAME= "&Path$&trim$(record$(1:9))&"."&RECORD$(11:13)&", recl=2000", display, input error ReadNext
+00300    mat ProcTextFound$(0)
+00305    ReadNextProcLine: linput #3: string$ eof DoneReadingProc error NotAProc
+00310       if ~fnAscii(String$) then goto NotAProc
+00312       let FoundSomething=1
+00314       for Index=1 to udim(mat SearchTerms$)
+00316          if pos(lwrc$(string$),lwrc$(searchTerms$(Index)))=0 then let FoundSomething=0 : goto ReadNextProcLine
+00318       next Index
+00330       if FoundSomething then
+00333          mat ProcTextFound$(udim(mat ProcTextFound$)+1)
+00335          let ProcTextFound$(udim(mat ProcTextFound$))=String$
+00337       end if
+00339    goto ReadNextProcLine
+00340    DoneReadingProc: let FileCount+=1
+
+00345    if udim(mat ProcTextFound$) then
+00350       PRINT #2: 'open #1:"name='&OUTFILE$&', PAGEOFLOW=10000",display,output' 
+00352       PRINT #2: 'print #1: tab(2);tab(1);rpt$("-",80);tab(1);"'&PATH$&trim$(RECORD$(1:9))&'.'&trim$(RECORD$(11:13))&'"' 
+00355       for Index=1 to udim(mat ProcTextFound$) 
+00360          PRINT #2: 'print #1: "'&srep$(ProcTextFound$(Index),"""","""""")&'"'
+00365       next Index
+00370       PRINT #2: "close #1:"
+00375    end if
+00395    NotAProc:  close #3:
+00400    goto ReadNext
+
+00815    ReadBRProgram: ! Its a BR Program
+00818    if timer-lastPrinted2>.002 then let LastPrinted2=Timer : PRINT #2: "Print """&str$(FileCount+1)&" of ""&env$(""filecount"")"
+00820    PRINT #2: "LOAD """&PATH$&RTRM$(RECORD$(1:9))&""""
+00822    PRINT #2: "list '"&SEARCHFOR$&"' >temp.[wsid]"
+00824    PRINT #2: "run srchhelp"
+00826    PRINT #2: "skip 5 if code"
+00828    PRINT #2: "LOAD """&PATH$&RTRM$(RECORD$(1:9))&""""
+00830    PRINT #2: 'open #1:"name='&OUTFILE$&'",d,o' !:
+         PRINT #2: 'print #1: tab(2);tab(1);rpt$("-",80);tab(1);"'&PATH$&trim$(RECORD$(1:9))&'.'&trim$(RECORD$(11:13))&'"' !:
+         PRINT #2: "close #1:"
+00840    PRINT #2: "list '"&SEARCHFOR$&"' >>"&OUTFILE$
+00850    FileCount+=1
+00860    GOTO ReadNext
+00870 DONE: !
+00880    PRINT #2: "system -M -C start "&Outfile$
+00885    print FileCount ! Print Final Count
+00887    let setenv("filecount",str$(filecount))
+00890 STOP
+
+01300 def FNVALID(FILENAME$*8)
+01305    fnvalid=1 !assume valid
+01310    for i = 1 to len(filename$)
+01320       if (ord(filename$(i:i))>64 and ord(filename$(i:i))<91) or (ord(filename$(i:i))>96 and ord(filename$(i:i))<123) or (ord(filename$(i:i))=95) then !:
+               ! good !:
+            else !:
+               fnvalid=0
+01330    next i
+01340 fnend
+01500 Ignore: Continue
+
+01700 def fnAscii(&string$;___,Char,Index)
+01710    let fnAscii=1
+01720    for index=1 to len(string$)
+01730       let Char=ord(string$(index:index))
+01740       if (Char<32 and Char><10 and Char><13 and Char><26) or Char>=127 then let fnAscii=0 : goto DonefnAscii
+01750    next index
+01760 DonefnAscii: fnend
+
+01990 dim Directory$*9999
+02000 def fnBuildFolderList(mat list$)
+02005    mat list$(1)
+02007    let list$(1)=br_filename$(os_filename$("."))&"\" ! Current dir first
+02010    if ~exists("dirlist.sch") then execute "system -M dir /s /b /ad >dirlist.sch"
+02020    open #10: "name=dirlist.sch, recl=2000", display, input
+02030    ReadNextFolder: ! 
+02032       linput #10 : directory$ eof DoneFolderList
+02035       if br_filename$(trim$(directory$))(1:1)<>":" and pos(br_filename$(trim$(directory$))," ")=0 then
+02040          mat List$(udim(mat List$)+1)
+02050          let List$(udim(mat List$))=br_filename$(Directory$)&"\"
+02055       end if
+02060    goto ReadNextFolder
+02070    DoneFolderList: ! Done
+02080    close #10:
+02085    ! execute "*free dirlist.sch"
+02090 fnend
+
+03500 def fnParseSearch(mat Terms$,String$*100;___,Index)
+03510    mat Terms$(0)
+03520    do while pos(String$,"' '")
+03530       mat Terms$(udim(mat Terms$)+1)
+03540       let Terms$(udim(mat Terms$))=String$(1:pos(String$,"' '")-1)
+03550       let String$=String$(pos(String$,"' '")+3:len(String$))
+03560    loop
+03570    mat Terms$(udim(mat Terms$)+1)
+03580    Terms$(udim(mat Terms$))=String$
+03590 fnend
+
+
+run ! Run the program, make the proc
+subproc srchproc ! Run the proc, fill the output file
+free srchproc ! Delete temp files
+free dir.doc
